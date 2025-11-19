@@ -3,81 +3,218 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ZOF Solver - Zero of Functions</title>
-    <link rel="stylesheet" href="{{ url_for('static', path='/style.css') }}">
+    <title>ZOF Solver | Advanced Root Finder</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
 </head>
 <body>
     <div class="container">
-        <h1>Zero of Functions (ZOF) Solver</h1>
-        <p>Numerical Methods for Root Finding</p>
+        <header>
+            <h1>ZOF Solver</h1>
+            <p>Advanced Numerical Methods for Root Finding</p>
+        </header>
 
-        <form method="post" action="/solve">
-            <label>Polynomial Coefficients (highest degree first, comma-separated):</label>
-            <input type="text" name="coeffs" value="{{ coeffs|default('1, -5, 6') }}" required placeholder="e.g., 1, -5, 6 for x²-5x+6">
+        <main>
+            <div class="solver-card">
+                <div class="input-section">
+                    <div class="form-group">
+                        <label for="method">Select Method</label>
+                        <select id="method" onchange="updateInputs()">
+                            <option value="bisection">Bisection Method</option>
+                            <option value="regula_falsi">Regula Falsi Method</option>
+                            <option value="secant">Secant Method</option>
+                            <option value="newton">Newton-Raphson Method</option>
+                            <option value="fixed_point">Fixed Point Iteration</option>
+                            <option value="modified_secant">Modified Secant Method</option>
+                        </select>
+                    </div>
 
-            <label>Method:</label>
-            <select name="method" id="method-select">
-                <option value="bisection">Bisection Method</option>
-                <option value="regula_falsi">Regula Falsi</option>
-                <option value="secant">Secant Method</option>
-                <option value="newton">Newton-Raphson</option>
-                <option value="fixed_point">Fixed Point Iteration</option>
-                <option value="modified_secant">Modified Secant</option>
-            </select>
+                    <div class="form-group">
+                        <label for="function">Function f(x)</label>
+                        <input type="text" id="function" placeholder="e.g., x**2 - 4" value="x**2 - 4">
+                        <small>Use Python syntax (e.g., x**2, math.sin(x))</small>
+                    </div>
 
-            <div class="params">
-                <input type="number" step="any" name="a" placeholder="a (initial left)" value="{{ request.form.a|default('') }}">
-                <input type="number" step="any" name="b" placeholder="b (initial right)" value="{{ request.form.b|default('') }}">
-                <input type="number" step="any" name="x0" placeholder="x0" required>
-                <input type="number" step="any" name="x1" placeholder="x1 (for secant)">
-                <input type="number" step="any" name="delta" value="0.01" placeholder="δ for modified secant">
+                    <div id="dynamic-inputs" class="dynamic-grid">
+                        <!-- Inputs injected by JS -->
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group half">
+                            <label for="tolerance">Tolerance</label>
+                            <input type="number" id="tolerance" value="0.00001" step="0.000001">
+                        </div>
+                        <div class="form-group half">
+                            <label for="max_iter">Max Iterations</label>
+                            <input type="number" id="max_iter" value="100">
+                        </div>
+                    </div>
+
+                    <button onclick="solve()" class="btn-solve">Find Root</button>
+                </div>
+
+                <div class="output-section">
+                    <div id="result-summary" class="result-box hidden">
+                        <h3>Result Found</h3>
+                        <p>Root: <span id="final-root" class="highlight"></span></p>
+                        <p>Iterations: <span id="final-iter"></span></p>
+                        <p>Final Error: <span id="final-error"></span></p>
+                    </div>
+                    <div id="error-box" class="error-box hidden"></div>
+                </div>
             </div>
 
-            <label>Tolerance:</label>
-            <input type="number" step="any" name="tol" value="1e-6">
-
-            <label>Max Iterations:</label>
-            <input type="number" name="max_iter" value="100">
-
-            <button type="submit">Solve</button>
-        </form>
-
-        {% if error_msg %}
-            <div class="error">{{ error_msg }}</div>
-        {% endif %}
-
-        {% if result is not none %}
-            <div class="result">
-                <h2>Result</h2>
-                <p><strong>Root ≈</strong> {{ "%.10f" % result }}</p>
-                <p><strong>Final Error ≈</strong> {{ "%.2e" % final_error }}</p>
-                <p><strong>Iterations:</strong> {{ num_iters }}</p>
+            <div id="table-container" class="table-card hidden">
+                <h3>Iteration History</h3>
+                <div class="table-wrapper">
+                    <table id="results-table">
+                        <thead>
+                            <!-- Headers injected by JS -->
+                        </thead>
+                        <tbody>
+                            <!-- Rows injected by JS -->
+                        </tbody>
+                    </table>
+                </div>
             </div>
-
-            {% if iterations %}
-                <h2>Iteration Details</h2>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>n</th>
-                            {% for key in iterations[0].keys() if key != 'n' %}
-                            <th>{{ key }}</th>
-                            {% endfor %}
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for it in iterations %}
-                        <tr>
-                            <td>{{ it.n }}</td>
-                            {% for key in it.keys() if key != 'n' %}
-                            <td>{{ "%.10g" % it[key] if it[key]|float != it[key]|int else it[key]|int }}</td>
-                            {% endfor %}
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            {% endif %}
-        {% endif %}
+        </main>
     </div>
+
+    <script>
+        const methodInputs = {
+            'bisection': [
+                {id: 'a', label: 'Start Interval (a)', type: 'number', value: 0},
+                {id: 'b', label: 'End Interval (b)', type: 'number', value: 3}
+            ],
+            'regula_falsi': [
+                {id: 'a', label: 'Start Interval (a)', type: 'number', value: 0},
+                {id: 'b', label: 'End Interval (b)', type: 'number', value: 3}
+            ],
+            'secant': [
+                {id: 'x0', label: 'First Guess (x0)', type: 'number', value: 0},
+                {id: 'x1', label: 'Second Guess (x1)', type: 'number', value: 3}
+            ],
+            'newton': [
+                {id: 'x0', label: 'Initial Guess (x0)', type: 'number', value: 1}
+            ],
+            'fixed_point': [
+                {id: 'x0', label: 'Initial Guess (x0)', type: 'number', value: 1}
+            ],
+            'modified_secant': [
+                {id: 'x0', label: 'Initial Guess (x0)', type: 'number', value: 1},
+                {id: 'delta', label: 'Delta', type: 'number', value: 0.01}
+            ]
+        };
+
+        function updateInputs() {
+            const method = document.getElementById('method').value;
+            const container = document.getElementById('dynamic-inputs');
+            container.innerHTML = '';
+            
+            methodInputs[method].forEach(input => {
+                const div = document.createElement('div');
+                div.className = 'form-group';
+                div.innerHTML = `
+                    <label for="${input.id}">${input.label}</label>
+                    <input type="${input.type}" id="${input.id}" value="${input.value}">
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        async function solve() {
+            const method = document.getElementById('method').value;
+            const func = document.getElementById('function').value;
+            const tol = document.getElementById('tolerance').value;
+            const max_iter = document.getElementById('max_iter').value;
+            
+            const payload = {
+                method: method,
+                function: func,
+                tolerance: tol,
+                max_iter: max_iter
+            };
+            
+            // Add dynamic inputs
+            methodInputs[method].forEach(input => {
+                payload[input.id] = document.getElementById(input.id).value;
+            });
+
+            try {
+                const response = await fetch('/solve', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(payload)
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    displayResults(data);
+                } else {
+                    showError(data.error);
+                }
+            } catch (e) {
+                showError("Network error or server unavailable.");
+            }
+        }
+
+        function displayResults(data) {
+            document.getElementById('error-box').classList.add('hidden');
+            document.getElementById('result-summary').classList.remove('hidden');
+            document.getElementById('table-container').classList.remove('hidden');
+            
+            document.getElementById('final-root').textContent = data.root.toFixed(6);
+            document.getElementById('final-iter').textContent = data.iterations;
+            document.getElementById('final-error').textContent = data.final_error.toExponential(4);
+            
+            // Build Table
+            const table = document.getElementById('results-table');
+            const thead = table.querySelector('thead');
+            const tbody = table.querySelector('tbody');
+            
+            thead.innerHTML = '';
+            tbody.innerHTML = '';
+            
+            if (data.results.length > 0) {
+                // Headers
+                const headers = Object.keys(data.results[0]);
+                const trHead = document.createElement('tr');
+                headers.forEach(h => {
+                    const th = document.createElement('th');
+                    th.textContent = h;
+                    trHead.appendChild(th);
+                });
+                thead.appendChild(trHead);
+                
+                // Rows
+                data.results.forEach(row => {
+                    const tr = document.createElement('tr');
+                    headers.forEach(h => {
+                        const td = document.createElement('td');
+                        let val = row[h];
+                        if (typeof val === 'number' && !Number.isInteger(val)) {
+                            val = val.toExponential(4);
+                        }
+                        td.textContent = val;
+                        tr.appendChild(td);
+                    });
+                    tbody.appendChild(tr);
+                });
+            }
+        }
+
+        function showError(msg) {
+            const box = document.getElementById('error-box');
+            box.textContent = msg;
+            box.classList.remove('hidden');
+            document.getElementById('result-summary').classList.add('hidden');
+            document.getElementById('table-container').classList.add('hidden');
+        }
+
+        // Init
+        updateInputs();
+    </script>
 </body>
 </html>

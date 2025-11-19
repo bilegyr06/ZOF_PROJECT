@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ZOF Solver - Zero of Functions</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>Zero of Functions (ZOF) Solver</h1>
+        <p>Numerical Methods for Root Finding</p>
+
+        <form method="post" action="/solve">
+            <label>Polynomial Coefficients (highest degree first, comma-separated):</label>
+            <input type="text" name="coeffs" value="{{ coeffs|default('1, -5, 6') }}" required placeholder="e.g., 1, -5, 6 for x²-5x+6">
+
+            <label>Method:</label>
+            <select name="method" id="method-select">
+                <option value="bisection">Bisection Method</option>
+                <option value="regula_falsi">Regula Falsi</option>
+                <option value="secant">Secant Method</option>
+                <option value="newton">Newton-Raphson</option>
+                <option value="fixed_point">Fixed Point Iteration</option>
+                <option value="modified_secant">Modified Secant</option>
+            </select>
+
+            <div class="params">
+                <input type="number" step="any" name="a" placeholder="a (initial left)" value="{{ request.form.a|default('') }}">
+                <input type="number" step="any" name="b" placeholder="b (initial right)" value="{{ request.form.b|default('') }}">
+                <input type="number" step="any" name="x0" placeholder="x0" required>
+                <input type="number" step="any" name="x1" placeholder="x1 (for secant)">
+                <input type="number" step="any" name="delta" value="0.01" placeholder="δ for modified secant">
+            </div>
+
+            <label>Tolerance:</label>
+            <input type="number" step="any" name="tol" value="1e-6">
+
+            <label>Max Iterations:</label>
+            <input type="number" name="max_iter" value="100">
+
+            <button type="submit">Solve</button>
+        </form>
+
+        {% if error_msg %}
+            <div class="error">{{ error_msg }}</div>
+        {% endif %}
+
+        {% if result is not none %}
+            <div class="result">
+                <h2>Result</h2>
+                <p><strong>Root ≈</strong> {{ "%.10f" % result }}</p>
+                <p><strong>Final Error ≈</strong> {{ "%.2e" % final_error }}</p>
+                <p><strong>Iterations:</strong> {{ num_iters }}</p>
+            </div>
+
+            {% if iterations %}
+                <h2>Iteration Details</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>n</th>
+                            {% for key in iterations[0].keys() if key != 'n' %}
+                            <th>{{ key }}</th>
+                            {% endfor %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for it in iterations %}
+                        <tr>
+                            <td>{{ it.n }}</td>
+                            {% for key in it.keys() if key != 'n' %}
+                            <td>{{ "%.10g" % it[key] if it[key]|float != it[key]|int else it[key]|int }}</td>
+                            {% endfor %}
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            {% endif %}
+        {% endif %}
+    </div>
+</body>
+</html>
